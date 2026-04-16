@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pandas to PySpark Native"
+  short_description: "Convert pandas codebases to native PySpark"
+  default_prompt: "Use $pandas-to-pyspark-native to convert this pandas-based Python project into idiomatic native PySpark."
