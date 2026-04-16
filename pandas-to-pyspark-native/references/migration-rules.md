@@ -24,6 +24,7 @@
 - PySpark native 구조를 유지한다.
 - 비즈니스 로직은 DataFrame 변환으로 표현한다.
 - `pyspark.sql.functions as F` 내장 함수를 우선 사용한다.
+- 파일 상단에 `import pyspark.sql.functions as F`와 `import pyspark.sql.types as T`를 기본 선언으로 둔다.
 - Python UDF와 pandas UDF는 기본적으로 금지한다.
 - 명시적 schema, 명시적 정렬, 명시적 키를 우선한다.
 - 대용량 파이프라인 리뷰가 가능하도록 읽기 쉬운 단계형 코드를 만든다.
@@ -46,6 +47,7 @@
   - pandas UDF
   - `rdd.map`
   - driver-side row loop
+- `udf`, `@udf`, `pandas_udf`, `rdd.map`은 모두 금지 패턴으로 간주한다.
 - UDF가 필요해 보이면 먼저 아래 대안을 찾는다.
   - `F.when`, `F.coalesce`, `F.expr`
   - `F.concat_ws`, `F.regexp_replace`, `F.substring`
@@ -82,15 +84,37 @@
 - `merge`는 `join`으로 바꾼다.
 - join key, join type, cardinality를 명시적으로 확인한다.
 - 작은 차원 테이블이면 `broadcast` 사용 가능성을 검토한다.
+- 작은 참조 데이터 조인은 `F.broadcast(small_df)`를 우선 검토한다.
 - 불필요한 shuffle을 만들지 않도록 join 전 projection/filter를 먼저 적용한다.
+
+### 타입 캐스팅 변환
+
+- `df['A'].astype(str)`는 `df.withColumn('A', F.col('A').cast(T.StringType()))`로 바꾼다.
+
+### 불리언 필터 변환
+
+- `df[df['A'] > 0]`는 `df.filter(F.col('A') > 0)`로 바꾼다.
 
 ## 성능 규칙
 
 - 불필요한 shuffle을 피한다.
 - 필요한 경우에만 broadcast join을 사용한다.
 - wide transformation을 최소화한다.
+- `collect()`, `count()`, `toPandas()`, `show()`는 transformation 중간 단계에서 사용하지 않는다.
 - `collect()`는 검증용 소량 데이터 비교에서만 제한적으로 사용한다.
 - production 경로에 `toPandas()`를 두지 않는다.
+
+## Window 함수 규칙
+
+- `shift()`, `rolling()`, `diff()` 같은 순차 의존 로직은 반드시 `Window.partitionBy(...).orderBy(...)` 기반으로 재작성한다.
+- 이전 행/다음 행 참조는 `lag`, `lead`를 우선 사용한다.
+- 누적 집계는 window aggregate를 사용하고 정렬 컬럼을 반드시 명시한다.
+
+## Null / 스키마 규칙
+
+- null 처리는 `fillna`, `na.fill`, `F.coalesce`를 명시적으로 사용한다.
+- JSON/Array explode 전에는 `StructType`, `ArrayType` 등 명시적 스키마를 먼저 정의한다.
+- Spark의 null/type 엄격성을 고려해 cast와 default 값을 명확히 남긴다.
 
 ## 검증 코드 규칙
 
